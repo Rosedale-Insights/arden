@@ -84,6 +84,10 @@ export async function POST(request: Request) {
       return createDataStreamResponse({
         execute: async (dataStream) => {
           await langchainService.initialize(session.user!.bubbleUserId);
+          console.log(
+            "Searching with bubbleUserId:",
+            session.user!.bubbleUserId
+          );
           const result = streamText({
             model: openai("gpt-4o"),
             system: systemPrompt,

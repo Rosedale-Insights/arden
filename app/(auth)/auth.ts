@@ -32,7 +32,7 @@ export const {
         try {
           // Call Bubble API
           const response = await fetch(
-            "https://app.tryrosedale.com/version-test/api/1.1/wf/get_user",
+            "https://app.tryrosedale.com/api/1.1/wf/get_user",
             {
               method: "POST",
               headers: {

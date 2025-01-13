@@ -118,6 +118,13 @@ export class LangChainService {
 
   async similaritySearch(query: string) {
     try {
+      console.log("Searching with filter:", { userId: this.userId });
+
+      this.retriever = this.vectorStore.asRetriever({
+        filter: { userId: this.userId },
+        k: 30,
+      });
+
       const retrievedDocs = await this.retriever.invoke(query);
 
       // Convert position to score (earlier = higher score)
