@@ -46,7 +46,7 @@ export const authConfig = {
       const path = nextUrl.pathname;
 
       // Check API key for ingest endpoint
-      if (path.startsWith("/api/ingest") || path.startsWith("/api/chat-sync")) {
+      if (path.startsWith("/api/ingest") || path.startsWith("/api/chat-sync" || path.startsWith("/api/delete-vectors")) {
         const authHeader = headers.get("authorization");
         return authHeader === `Bearer ${process.env.API_KEY}`;
       }
