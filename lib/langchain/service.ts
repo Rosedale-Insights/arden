@@ -81,16 +81,21 @@ export class LangChainService {
     console.log("📥 Starting document ingestion");
     try {
       const textSplitter = new RecursiveCharacterTextSplitter({
-        chunkSize: 500, // Smaller chunks for more precise matching
-        chunkOverlap: 100, // Decent overlap to maintain context
-        separators: ["\n\n", "\n", ".", "!", "?", ",", " ", ""], // Custom separators
+        chunkSize: 500,
+        chunkOverlap: 100,
+        separators: ["\n\n", "\n", ".", "!", "?", ",", " ", ""],
         keepSeparator: true,
       });
 
       const docs = await textSplitter.createDocuments([text]);
 
-      // Enhance documents with metadata
+      // Enhance documents with metadata and create prefixed IDs
       const enhancedDocs = docs.map((doc, index) => {
+        // Create a prefixed ID that includes userId: user_123#doc_456#chunk_789
+        const prefixedId = `user_${
+          metadata.userId
+        }#doc_${Date.now()}#chunk_${index}`;
+
         return new Document({
           pageContent: doc.pageContent,
           metadata: {
@@ -102,6 +107,7 @@ export class LangChainService {
             documentId: metadata.documentId || `doc-${Date.now()}`,
             title: metadata.title,
             source: metadata.source,
+            id: prefixedId,
           },
         });
       });
@@ -152,17 +158,65 @@ export class LangChainService {
 
   async deleteUserDocuments(userId: string) {
     try {
-      console.log(`🗑️ Deleting documents for user: ${userId}`);
+      console.log(`🗑️ Attempting to delete documents for user: ${userId}`);
       const index = this.pineconeClient.Index(process.env.PINECONE_INDEX_NAME!);
 
-      await index.deleteMany({
-        filter: { userId: userId },
-      });
+      // List all vectors with the user prefix
+      const userPrefix = `user_${userId}#`;
+      console.log("Listing vectors with prefix:", userPrefix);
 
-      console.log(`✅ Successfully deleted documents for user: ${userId}`);
+      let allIds: string[] = [];
+      let paginationToken: string | undefined;
+
+      // Paginate through all results
+      do {
+        const statsResponse = await index.describeIndexStats();
+
+        // Get matching vector IDs from the stats
+        const matchingIds = Object.keys(
+          statsResponse.namespaces?.default || {}
+        ).filter((id) => id.startsWith(userPrefix));
+
+        allIds = allIds.concat(matchingIds);
+        paginationToken = undefined;
+
+        console.log(`Found ${matchingIds.length} vectors`);
+      } while (paginationToken);
+
+      if (allIds.length === 0) {
+        console.log("No documents found for user:", userId);
+        return true;
+      }
+
+      console.log(`Found total of ${allIds.length} vectors to delete`);
+
+      // Delete vectors one at a time
+      let successCount = 0;
+      for (const id of allIds) {
+        try {
+          await index.deleteOne(id);
+          successCount++;
+          console.log(`Deleted vector ${successCount}/${allIds.length}`);
+        } catch (deleteError) {
+          console.error("Error deleting vector:", {
+            id,
+            error: deleteError,
+          });
+        }
+      }
+
+      console.log(
+        `✅ Successfully deleted ${successCount}/${allIds.length} documents for user: ${userId}`
+      );
       return true;
     } catch (error) {
-      console.error("❌ Error deleting user documents:", error);
+      console.error("❌ Error deleting user documents:", {
+        error,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorStack: error instanceof Error ? error.stack : undefined,
+        userId,
+        indexName: process.env.PINECONE_INDEX_NAME,
+      });
       throw error;
     }
   }
