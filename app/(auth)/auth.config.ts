@@ -45,12 +45,8 @@ export const authConfig = {
       const isLoggedIn = !!auth?.user;
       const path = nextUrl.pathname;
 
-      // Check API key for ingest endpoint
-      if (
-        path.startsWith("/api/ingest") ||
-        path.startsWith("/api/chat-sync") ||
-        path.startsWith("/api/delete-vectors")
-      ) {
+      // Check API key for all /api routes except /api/auth
+      if (path.startsWith("/api") && !path.startsWith("/api/auth")) {
         const authHeader = headers.get("authorization");
         return authHeader === `Bearer ${process.env.API_KEY}`;
       }
