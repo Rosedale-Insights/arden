@@ -161,42 +161,30 @@ export class LangChainService {
       console.log(`🗑️ Attempting to delete documents for user: ${userId}`);
       const index = this.pineconeClient.Index(process.env.PINECONE_INDEX_NAME!);
 
-      // List all vectors with the user prefix
-      const userPrefix = `user_${userId}#`;
-      console.log("Listing vectors with prefix:", userPrefix);
+      // Query for vectors with matching userId in metadata
+      const queryResponse = await index.query({
+        vector: new Array(3072).fill(0),
+        topK: 10000,
+        filter: { userId: userId },
+        includeMetadata: true,
+      });
 
-      let allIds: string[] = [];
-      let paginationToken: string | undefined;
-
-      // Paginate through all results
-      do {
-        const statsResponse = await index.describeIndexStats();
-
-        // Get matching vector IDs from the stats
-        const matchingIds = Object.keys(
-          statsResponse.namespaces?.default || {}
-        ).filter((id) => id.startsWith(userPrefix));
-
-        allIds = allIds.concat(matchingIds);
-        paginationToken = undefined;
-
-        console.log(`Found ${matchingIds.length} vectors`);
-      } while (paginationToken);
-
-      if (allIds.length === 0) {
+      if (!queryResponse.matches || queryResponse.matches.length === 0) {
         console.log("No documents found for user:", userId);
         return true;
       }
 
-      console.log(`Found total of ${allIds.length} vectors to delete`);
+      const vectorIds = queryResponse.matches.map((match) => match.id);
+      console.log(`Found ${vectorIds.length} vectors to delete`);
+      console.log("Sample IDs:", vectorIds.slice(0, 3));
 
       // Delete vectors one at a time
       let successCount = 0;
-      for (const id of allIds) {
+      for (const id of vectorIds) {
         try {
           await index.deleteOne(id);
           successCount++;
-          console.log(`Deleted vector ${successCount}/${allIds.length}`);
+          console.log(`Deleted vector ${successCount}/${vectorIds.length}`);
         } catch (deleteError) {
           console.error("Error deleting vector:", {
             id,
@@ -206,7 +194,7 @@ export class LangChainService {
       }
 
       console.log(
-        `✅ Successfully deleted ${successCount}/${allIds.length} documents for user: ${userId}`
+        `✅ Successfully deleted ${successCount}/${vectorIds.length} documents for user: ${userId}`
       );
       return true;
     } catch (error) {
